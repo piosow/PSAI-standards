@@ -12,6 +12,7 @@ Start with [`../instructions.md`](../instructions.md): it contains the rules and
 
 ### Features
 
+- [Antigravity plugin](features/antigravity-plugin.md) — the same standards for Google Antigravity, generated from the Claude Code plugin
 - [Claude Code hooks](features/claude-code-hooks.md) — session context and pre-commit guard for the agent
 - [Commit enforcement](features/commit-enforcement.md) — git hooks and CI check for commit messages and changelog
 - [Planning and model matrix](features/planning-and-model-matrix.md) — complexity tiers, model suggestions, orchestration of large work

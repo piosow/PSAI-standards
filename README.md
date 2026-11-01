@@ -9,7 +9,7 @@ Engineering standards that keep projects structured — for humans and for any A
 - **Feature docs in the repo** (`docs/features/`), all linked from `docs/README.md`.
 - **Complexity-rated plans** (XS–XL) with model suggestions for Anthropic, Google and OpenAI; large work runs as orchestrated subtasks.
 
-Enforcement is layered: Claude Code plugin hooks → git hooks in the repo (any tool, any person) → CI check on pull requests.
+Enforcement is layered: plugin hooks (Claude Code, Google Antigravity) → git hooks in the repo (any tool, any person) → CI check on pull requests.
 
 ## Install the Claude Code plugin
 
@@ -35,7 +35,19 @@ Then, in a project:
 | `psai-standards:audit` | Check a repository against the standard |
 | `psai-standards:rules` | Working rules loaded automatically during changes |
 
-## Without Claude Code
+## Install in Google Antigravity
+
+The Antigravity plugin is generated from the Claude Code plugin, so both have the same rules.
+
+```bash
+git clone https://github.com/piosow/PSAI-standards.git
+mkdir -p ~/.gemini/config/plugins
+cp -R PSAI-standards/plugins/psai-standards-antigravity ~/.gemini/config/plugins/psai-standards
+```
+
+Then, in a project: `/psai-init`. Skills are `psai-init`, `psai-plan`, `psai-commit`, `psai-document-feature`, `psai-audit`. Details and known limitations: [Antigravity plugin](docs/features/antigravity-plugin.md).
+
+## Without a plugin
 
 Copy `plugins/psai-standards/templates/` into your project (see [Project structure](docs/features/project-structure.md)), then:
 

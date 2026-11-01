@@ -28,8 +28,9 @@ Flags are checked on the command with quoted strings and heredocs removed, so me
 ## Technical design
 
 - `plugins/psai-standards/hooks/hooks.json` — hook registration.
-- `plugins/psai-standards/scripts/session-context.mjs`, `guard-git.mjs` — Node ESM, no dependencies.
-- `plugins/psai-standards/scripts/lib/attribution.mjs` — attribution patterns shared by the guard.
+- `plugins/psai-standards/scripts/session-context.mjs`, `guard-git.mjs` — thin adapters for the Claude Code hook format. Node ESM, no dependencies.
+- `plugins/psai-standards/scripts/lib/git-policy.mjs`, `session-report.mjs` — tool-agnostic logic, shared with the [Antigravity plugin](antigravity-plugin.md).
+- `plugins/psai-standards/scripts/lib/attribution.mjs` — attribution patterns used by the guard.
 - Deny is returned as `hookSpecificOutput.permissionDecision: "deny"` with exit code 0.
 
 ## Configuration

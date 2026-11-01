@@ -1,0 +1,17 @@
+{
+  "psai-session-context": {
+    "SessionStart": [
+      { "type": "command", "command": "node ./scripts/session-context.mjs", "timeout": 10 }
+    ]
+  },
+  "psai-guard-git": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          { "type": "command", "command": "node ./scripts/guard-git.mjs", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

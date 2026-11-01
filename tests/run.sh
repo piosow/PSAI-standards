@@ -1,11 +1,14 @@
 #!/bin/sh
-# Testy hooków PSAI: git hooki (commit-msg, pre-commit) i guard Claude Code.
+# Testy PSAI: git hooki (commit-msg, pre-commit), hooki pluginu dla Claude Code i Antigravity,
+# synchronizacja wygenerowanego pluginu Antigravity.
 # Uruchom z katalogu głównego repo: sh tests/run.sh
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOKS="$ROOT/plugins/psai-standards/templates/githooks"
 GUARD="$ROOT/plugins/psai-standards/scripts/guard-git.mjs"
+AGY="$ROOT/plugins/psai-standards-antigravity"
+AGY_GUARD="$AGY/scripts/guard-git.mjs"
 pass=0; failn=0
 
 ok()  { pass=$((pass+1)); }
@@ -91,13 +94,34 @@ git commit -qm "docs(features): document reservation export feature" 2>/dev/null
 git commit -q --allow-empty -m "wip" 2>/dev/null && bad "real bad commit accepted" || ok
 sh .githooks/ci-check.sh HEAD~1 2>/dev/null >/dev/null && ok || bad "ci-check on good range"
 
-# --- guard Claude Code ---
+# --- synchronizacja pluginu Antigravity ---
+node "$ROOT/tools/build-antigravity.mjs" --check >/dev/null 2>&1 && ok || bad "Antigravity plugin out of date (run: node tools/build-antigravity.mjs)"
+[ "$(node -p "require('$ROOT/plugins/psai-standards/.claude-plugin/plugin.json').version")" = "$(node -p "require('$AGY/plugin.json').version")" ] \
+  && ok || bad "plugin versions differ between Claude Code and Antigravity"
+
+# --- guard: każdy przypadek sprawdzany w formacie Claude Code i Antigravity ---
 # expect_guard <deny|allow> <komenda> <opis>
 expect_guard() {
   out="$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:process.argv[1]}}))' "$2" | node "$GUARD")"
   case "$out" in *'"deny"'*) got=deny ;; *) got=allow ;; esac
-  [ "$got" = "$1" ] && ok || bad "guard: $3 (got $got)"
+  [ "$got" = "$1" ] && ok || bad "guard (claude): $3 (got $got)"
+
+  out="$(node -e 'process.stdout.write(JSON.stringify({toolCall:{name:"run_command",args:{CommandLine:process.argv[1],Cwd:"/tmp"}}}))' "$2" | node "$AGY_GUARD")"
+  case "$out" in *'"decision":"deny"'*) got=deny ;; *'"decision":"allow"'*) got=allow ;; *) got=invalid ;; esac
+  [ "$got" = "$1" ] && ok || bad "guard (antigravity): $3 (got $got)"
 }
+# Antigravity: inne narzędzia niż run_command są przepuszczane
+out="$(echo '{"toolCall":{"name":"write_to_file","args":{"CodeContent":"git commit --no-verify"}}}' | node "$AGY_GUARD")"
+case "$out" in *'"allow"'*) ok ;; *) bad "guard (antigravity): non-shell tool must be allowed" ;; esac
+
+# --- kontekst sesji ---
+out="$(printf '{"cwd":"%s"}' "$T" | node "$ROOT/plugins/psai-standards/scripts/session-context.mjs")"
+case "$out" in *additionalContext*'PSAI standards are active'*) ok ;; *) bad "session context (claude)" ;; esac
+out="$(cd "$AGY" && printf '{"workspacePaths":["%s"]}' "$T" | node ./scripts/session-context.mjs)"
+case "$out" in *injectSteps*systemMessage*'PSAI standards are active'*) ok ;; *) bad "session context (antigravity)" ;; esac
+case "$out" in *psai-init*|*psai-audit*|*'master configuration'*) ok ;; *) bad "session context (antigravity) skill names" ;; esac
+out="$(cd "$AGY" && echo '{"workspacePaths":["/"]}' | node ./scripts/session-context.mjs)"
+[ "$out" = "{}" ] && ok || bad "session context (antigravity) outside git repo must be empty"
 expect_guard allow 'ls -la'                                                       "non-git command"
 expect_guard allow 'git status'                                                   "git status"
 expect_guard allow 'git commit -m "docs: describe the -n flag usage"'             "-n inside message"

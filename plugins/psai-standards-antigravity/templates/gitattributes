@@ -1,0 +1,3 @@
+# Wymuszenie LF dla skryptów shell — CRLF psuje hooki na Windows
+.githooks/* text eol=lf
+*.sh text eol=lf

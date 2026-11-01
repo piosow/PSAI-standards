@@ -53,6 +53,8 @@ Present the plan and wait for approval before changing code, unless the user alr
 ## 5. Execute
 
 - **XS–M overall:** execute in the current session, task by task.
+<!-- claude-only:start plan-execute-lxl -->
 - **L/XL overall:** use the `task-orchestrator` skill (it may appear as `anthropic-skills:task-orchestrator` or `task-orchestrator`). Pass it the approved plan with each task's tier mapped to its orchestrator label (`haiku`, `sonnet`, `opus`) from the matrix, plus the PSAI requirements each subtask must meet (changelog, glossary, feature docs, no AI attribution in commits).
   - If no task-orchestrator skill is available, do the same manually: run each independent subtask in a subagent with the model from its tier, run dependent tasks in order, then have a fresh top-tier subagent that did not write the code review the combined result against the plan before you commit.
+<!-- claude-only:end -->
 - Commit per logical task with `psai-standards:commit`, not one commit for the whole plan.
