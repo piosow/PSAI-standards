@@ -1,0 +1,28 @@
+name: PSAI standards
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  psai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commits and repository structure
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+            # Pierwszy push gałęzi: brak poprzedniego SHA — sprawdzamy tylko ostatni commit
+            if [ "$base" = "0000000000000000000000000000000000000000" ]; then base="$head~1"; fi
+          fi
+          sh .githooks/ci-check.sh "$base" "$head"

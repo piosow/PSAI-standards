@@ -1,0 +1,17 @@
+{
+  "name": "psai",
+  "description": "PSAI engineering standards: project structure, commit hygiene, changelog, glossary, feature docs and model-aware planning.",
+  "owner": {
+    "name": "Piotr Sowiak",
+    "url": "https://github.com/piosow"
+  },
+  "plugins": [
+    {
+      "name": "psai-standards",
+      "source": "./plugins/psai-standards",
+      "description": "Enforces project structure (instructions.md, docs/CHANGELOG.md, docs/GLOSSARY.md, feature docs), clean commits without AI attribution, and complexity-rated plans with model suggestions for Anthropic, Google and OpenAI.",
+      "category": "productivity",
+      "tags": ["standards", "git", "documentation", "changelog", "planning"]
+    }
+  ]
+}

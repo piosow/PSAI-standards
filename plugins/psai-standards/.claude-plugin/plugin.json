@@ -1,0 +1,13 @@
+{
+  "name": "psai-standards",
+  "displayName": "PSAI Standards",
+  "version": "1.0.0",
+  "description": "Keeps projects structured: master instructions.md readable by any LLM, Conventional Commits without AI attribution, docs/CHANGELOG.md for behavior changes, docs/GLOSSARY.md, in-repo feature docs with a table of contents, and complexity-rated plans with model suggestions (Anthropic, Google, OpenAI).",
+  "author": {
+    "name": "Piotr Sowiak",
+    "url": "https://github.com/piosow"
+  },
+  "repository": "https://github.com/piosow/PSAI-standards",
+  "license": "MIT",
+  "keywords": ["standards", "git", "conventional-commits", "changelog", "glossary", "documentation", "planning"]
+}

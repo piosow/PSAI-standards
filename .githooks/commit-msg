@@ -1,0 +1,119 @@
+#!/bin/sh
+# PSAI standards — hook commit-msg
+# 1) Usuwa atrybucję AI z wiadomości (w trybie CI: zgłasza błąd).
+# 2) Wymusza Conventional Commits z opisowym tematem.
+# 3) Wymusza treść (body) dla zmian zachowania aplikacji.
+# 4) Wymusza wpis w docs/CHANGELOG.md dla feat/fix/perf/revert/breaking.
+#
+# Tryb CI: PSAI_COMMIT=<sha> .githooks/commit-msg <plik-z-wiadomością>
+#   — pliki zmienione liczone z podanego commita, atrybucja = błąd zamiast usunięcia.
+#
+# UWAGA: wzorce atrybucji są zduplikowane w scripts/lib/attribution.mjs pluginu — zmieniaj obie listy.
+
+MSG_FILE="$1"
+CHANGELOG="docs/CHANGELOG.md"
+fail=0
+
+err() { printf '[psai] ERROR: %s\n' "$1" >&2; fail=1; }
+note() { printf '[psai] %s\n' "$1" >&2; }
+
+[ -f "$MSG_FILE" ] || { echo "[psai] commit-msg: message file not found" >&2; exit 1; }
+
+# --- 1. Atrybucja AI -------------------------------------------------------
+ATTR_RE='^[[:space:]]*co-authored-by:.*(claude|anthropic|openai|chatgpt|gpt-[0-9]|copilot|gemini|bard|codex|cursor|devin|aider|windsurf|codeium|tabnine)'
+ATTR_RE="$ATTR_RE"'|generated (with|by|using) .*(claude|chatgpt|openai|copilot|gemini|codex|cursor|llm|(^|[^a-z])ai([^a-z]|$))'
+ATTR_RE="$ATTR_RE"'|^[[:space:]]*(claude-session|ai-assisted|assisted-by|generated-by|ai-generated)[[:space:]]*:'
+ATTR_RE="$ATTR_RE"'|claude\.ai/code|chatgpt\.com/(c|share)/'
+ROBOT="$(printf '\360\237\244\226')" # emoji robota (U+1F916) w UTF-8
+
+has_attr=0
+if grep -qiE "$ATTR_RE" "$MSG_FILE" || grep -qF "$ROBOT" "$MSG_FILE"; then has_attr=1; fi
+
+if [ "$has_attr" -eq 1 ]; then
+  if [ -n "$PSAI_COMMIT" ]; then
+    err "commit $PSAI_COMMIT contains AI attribution:"
+    grep -iE "$ATTR_RE" "$MSG_FILE" >&2
+    grep -F "$ROBOT" "$MSG_FILE" >&2
+  else
+    tmp="$MSG_FILE.psai.$$"
+    grep -viE "$ATTR_RE" "$MSG_FILE" | grep -vF "$ROBOT" > "$tmp"
+    # Usuń puste linie na końcu, które zostały po wyciętych trailerach
+    awk '{ lines[NR]=$0 } END { n=NR; while (n>0 && lines[n] ~ /^[[:space:]]*$/) n--; for (i=1;i<=n;i++) print lines[i] }' "$tmp" > "$MSG_FILE"
+    rm -f "$tmp"
+    note "removed AI attribution lines from the commit message (PSAI rule: no AI attribution)."
+  fi
+fi
+
+# --- Odczyt wiadomości bez komentarzy i linii scissors ---------------------
+clean="$(sed -e '/^# ------------------------ >8 ------------------------$/,$d' -e '/^#/d' "$MSG_FILE")"
+header="$(printf '%s\n' "$clean" | sed -n '/[^[:space:]]/{p;q;}')"
+body="$(printf '%s\n' "$clean" | awk 'f && NF {print} /[^[:space:]]/ && !h {h=1; f=1; next}')"
+
+# Commity tworzone przez git (merge, autosquash) przepuszczamy
+case "$header" in
+  "Merge "*|"fixup! "*|"squash! "*|"amend! "*) exit $fail ;;
+  'Revert "'*) header="revert: ${header#Revert }" ;;
+esac
+
+# --- 2. Format Conventional Commits ----------------------------------------
+TYPES='feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert'
+if ! printf '%s' "$header" | grep -qE "^($TYPES)(\([a-z0-9._/-]+\))?!?: [^[:space:]].*"; then
+  err "header must follow Conventional Commits: <type>(<scope>)!: <description>"
+  note "  allowed types: $(echo "$TYPES" | tr '|' ' ')"
+  note "  got: $header"
+else
+  type="$(printf '%s' "$header" | sed -E 's/^([a-z]+).*/\1/')"
+  desc="$(printf '%s' "$header" | sed -E 's/^[^:]+: //')"
+  breaking=0
+  printf '%s' "$header" | grep -qE '^[a-z]+(\([^)]*\))?!:' && breaking=1
+  printf '%s\n' "$body" | grep -qE '^BREAKING[ -]CHANGE:' && breaking=1
+
+  [ "${#header}" -gt 100 ] && err "header is ${#header} chars; keep it at 100 or fewer."
+  [ "${#desc}" -lt 10 ] && err "description \"$desc\" is too short; describe what changed (min 10 chars)."
+  if printf '%s' "$desc" | grep -qiE '^(update[sd]?|fix(e[sd])?|change[sd]?|wip|tmp|temp|test|stuff|misc|minor|cleanup|changes|small fix(es)?|refactor(ing)?|poprawki|zmiany)\.?$'; then
+    err "description \"$desc\" is too generic; say what happened and where."
+  fi
+
+  # --- 3. Body dla zmian zachowania ----------------------------------------
+  # psai.requireBody: auto (domyślnie) | always | never
+  require_body="$(git config --get psai.requireBody 2>/dev/null || echo auto)"
+  behavioral=0
+  case "$type" in feat|fix|perf|revert) behavioral=1 ;; esac
+  [ "$breaking" -eq 1 ] && behavioral=1
+
+  need_body=0
+  case "$require_body" in
+    always) need_body=1 ;;
+    never) need_body=0 ;;
+    *) need_body=$behavioral ;;
+  esac
+  body_text="$(printf '%s\n' "$body" | grep -viE '^[A-Za-z-]+: ' | grep -v '^[[:space:]]*$')"
+  if [ "$need_body" -eq 1 ] && [ -z "$body_text" ]; then
+    err "\"$type\" commits need a body explaining what happened and why (blank line after the header)."
+  fi
+
+  # --- 4. CHANGELOG ----------------------------------------------------------
+  if [ "$behavioral" -eq 1 ] && ! printf '%s\n' "$body" | grep -qiE '^changelog:[[:space:]]*skip'; then
+    if [ -n "$PSAI_COMMIT" ]; then
+      files="$(git diff-tree --no-commit-id --name-only -r "$PSAI_COMMIT" 2>/dev/null)"
+    else
+      files="$(git diff --cached --name-only 2>/dev/null)"
+    fi
+    if ! printf '%s\n' "$files" | grep -qxF "$CHANGELOG"; then
+      # Heurystyka dla --amend: CHANGELOG był już w poprawianym commicie z tym samym nagłówkiem
+      amend_ok=0
+      if [ -z "$PSAI_COMMIT" ] && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
+        if [ "$(git log -1 --format=%s HEAD)" = "$header" ] && \
+           git diff-tree --no-commit-id --name-only -r HEAD | grep -qxF "$CHANGELOG"; then
+          amend_ok=1
+        fi
+      fi
+      [ "$amend_ok" -eq 0 ] && err "\"$type\" changes application behavior: add an entry to $CHANGELOG under [Unreleased] in the same commit."
+    fi
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  note "commit rejected by PSAI standards. See instructions.md, section \"Commits\"."
+fi
+exit $fail

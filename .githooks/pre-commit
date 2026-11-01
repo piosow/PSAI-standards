@@ -1,0 +1,42 @@
+#!/bin/sh
+# PSAI standards — hook pre-commit
+# Sprawdza strukturę repozytorium na podstawie INDEKSU (to, co faktycznie trafi do commita):
+#  - wymagane pliki istnieją,
+#  - CHANGELOG ma sekcję [Unreleased],
+#  - każdy dokument w docs/features/ jest podlinkowany ze spisu treści docs/README.md.
+#
+# Tryb CI: PSAI_REF=<sha> .githooks/pre-commit — sprawdza drzewo wskazanego commita.
+
+fail=0
+err() { printf '[psai] ERROR: %s\n' "$1" >&2; fail=1; }
+
+# Źródło plików: indeks (":path") lub commit ("<sha>:path")
+src="${PSAI_REF:+$PSAI_REF}"
+exists() { git cat-file -e "$src:$1" 2>/dev/null; }
+show() { git show "$src:$1" 2>/dev/null; }
+list_dir() {
+  if [ -n "$PSAI_REF" ]; then git ls-tree -r --name-only "$PSAI_REF" -- "$1"
+  else git ls-files --cached -- "$1"; fi
+}
+
+for f in instructions.md docs/README.md docs/CHANGELOG.md docs/GLOSSARY.md; do
+  exists "$f" || err "required file $f is missing (or not staged)."
+done
+
+if exists docs/CHANGELOG.md; then
+  show docs/CHANGELOG.md | grep -qE '^## \[Unreleased\]' || \
+    err "docs/CHANGELOG.md must contain a '## [Unreleased]' section (Keep a Changelog)."
+fi
+
+if exists docs/README.md; then
+  toc="$(show docs/README.md)"
+  for doc in $(list_dir docs/features/ | grep -E '\.md$'); do
+    name="${doc#docs/}"
+    case "$(basename "$doc")" in _*) continue ;; esac # pliki z prefiksem "_" to szablony
+    printf '%s' "$toc" | grep -qF "($name)" || \
+      err "$doc is not linked from docs/README.md (expected a link to \"$name\")."
+  done
+fi
+
+[ "$fail" -ne 0 ] && printf '[psai] commit rejected by PSAI standards. See instructions.md, section "Documentation".\n' >&2
+exit $fail
